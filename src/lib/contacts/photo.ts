@@ -13,8 +13,12 @@ export const PHOTO_MIME_TYPES = [
   "image/webp",
 ] as const;
 
-/** The API's cap on the *decoded* image, mirrored here to fail before a round trip. */
-export const MAX_PHOTO_BYTES = 1_048_576;
+/**
+ * The API's cap on the *decoded* image, mirrored here to fail before a round trip.
+ * Sized for an avatar: a 512px JPEG lands around 40 KB, so this is ample headroom
+ * while keeping a full page of contacts a sane response size.
+ */
+export const MAX_PHOTO_BYTES = 262_144;
 
 /** Longest edge we downscale to before encoding. An avatar is never shown larger. */
 export const AVATAR_MAX_EDGE = 512;
