@@ -1,3 +1,4 @@
+import PhotoField from "@/components/contacts/PhotoField";
 import type { ContactFieldSpec } from "@/lib/contacts/schema";
 
 const CONTROL =
@@ -53,13 +54,21 @@ export default function Field({
         )}
       </label>
 
-      {field.type === "textarea" ? (
+      {field.type === "image" ? (
+        <PhotoField
+          id={id}
+          name={field.name}
+          defaultValue={defaultValue}
+          error={error}
+        />
+      ) : field.type === "textarea" ? (
         <textarea {...shared} rows={4} className={`${shared.className} resize-y`} />
       ) : (
         <input {...shared} type={field.type ?? "text"} />
       )}
 
-      {error ? (
+      {/* The image control owns its own error line, next to the preview. */}
+      {error && field.type !== "image" ? (
         <p id={errorId} role="alert" className="mt-1.5 text-[13px] text-destructive">
           {error}
         </p>
