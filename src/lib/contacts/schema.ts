@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_PHOTO_BYTES, photoValidationError } from "./photo";
 import type { ContactInput } from "./types";
 
 /**
@@ -52,6 +53,18 @@ export const contactInputSchema = z.object({
     .transform((value) => value || null)
     .nullable()
     .default(null),
+  // Already a data URL by the time it reaches here — the form control encodes it.
+  // Checked anyway so a hand-crafted POST fails here rather than at the API.
+  photo: z
+    .string()
+    .trim()
+    .transform((value) => value || null)
+    .nullable()
+    .default(null)
+    .superRefine((value, ctx) => {
+      const error = photoValidationError(value);
+      if (error) ctx.addIssue({ code: "custom", message: error });
+    }),
 }) satisfies z.ZodType<ContactInput, unknown>;
 
 export type ContactFormValues = z.input<typeof contactInputSchema>;
@@ -77,7 +90,7 @@ export function zodFieldErrors(
 export interface ContactFieldSpec {
   name: keyof ContactInput;
   label: string;
-  type?: "text" | "email" | "tel" | "textarea";
+  type?: "text" | "email" | "tel" | "textarea" | "image";
   required?: boolean;
   maxLength: number;
   placeholder?: string;
@@ -93,6 +106,22 @@ export interface ContactFieldGroup {
 }
 
 export const CONTACT_FIELD_GROUPS: ContactFieldGroup[] = [
+  {
+    title: "Photo",
+    description:
+      "Optional. Shown as a circular avatar; contacts without one keep their initials.",
+    fields: [
+      {
+        name: "photo",
+        label: "Photo",
+        type: "image",
+        // Base64 inflates by ~4/3, so this is the data URL length that corresponds
+        // to the API's cap on the decoded image.
+        maxLength: Math.ceil((MAX_PHOTO_BYTES * 4) / 3) + 64,
+        wide: true,
+      },
+    ],
+  },
   {
     title: "Identity",
     description: "First name, last name, and email are required.",
