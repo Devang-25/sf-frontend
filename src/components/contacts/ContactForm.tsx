@@ -6,6 +6,7 @@ import Link from "next/link";
 import { AlertCircle, Loader2 } from "lucide-react";
 import Field from "@/components/ui/Field";
 import Button, { buttonClasses } from "@/components/ui/Button";
+import { FormBusyProvider, useFormBusy } from "@/components/ui/FormBusy";
 import { CONTACT_FIELD_GROUPS } from "@/lib/contacts/schema";
 import {
   EMPTY_FORM_STATE,
@@ -21,13 +22,16 @@ export type ContactFormAction = (
 
 function SubmitButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
+  // A field still preparing its value (the photo picker encoding an image) would
+  // otherwise let this submit the previous value.
+  const { busy } = useFormBusy();
 
   return (
-    <Button type="submit" disabled={pending}>
-      {pending ? (
+    <Button type="submit" disabled={pending || busy}>
+      {pending || busy ? (
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
       ) : null}
-      {pending ? "Saving…" : label}
+      {pending ? "Saving…" : busy ? "Preparing…" : label}
     </Button>
   );
 }
@@ -55,7 +59,8 @@ export default function ContactForm({
   }
 
   return (
-    <form action={formAction} noValidate className="space-y-8">
+    <FormBusyProvider>
+      <form action={formAction} noValidate className="space-y-8">
       {state.status === "error" && state.message ? (
         <div
           role="alert"
@@ -96,12 +101,13 @@ export default function ContactForm({
         </fieldset>
       ))}
 
-      <div className="flex items-center gap-2 border-t border-hairline pt-4">
-        <SubmitButton label={submitLabel} />
-        <Link href={cancelHref} className={buttonClasses("secondary")}>
-          Cancel
-        </Link>
-      </div>
-    </form>
+        <div className="flex items-center gap-2 border-t border-hairline pt-4">
+          <SubmitButton label={submitLabel} />
+          <Link href={cancelHref} className={buttonClasses("secondary")}>
+            Cancel
+          </Link>
+        </div>
+      </form>
+    </FormBusyProvider>
   );
 }

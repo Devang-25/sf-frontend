@@ -1,8 +1,9 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { ImagePlus, Loader2, Trash2 } from "lucide-react";
 import { buttonClasses } from "@/components/ui/Button";
+import { useFormBusy } from "@/components/ui/FormBusy";
 import {
   PHOTO_MIME_TYPES,
   fileToAvatarDataUrl,
@@ -30,6 +31,23 @@ export default function PhotoField({
   const [localError, setLocalError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const fileInput = useRef<HTMLInputElement>(null);
+  const { setFieldBusy } = useFormBusy();
+
+  /**
+   * Identifies the most recent request, so a conversion that resolves after the
+   * user has picked a different file — or removed the photo altogether — is
+   * discarded instead of overwriting the newer intent.
+   */
+  const latestRequest = useRef(0);
+
+  // Hold the form's submit while an image is still being encoded; the hidden
+  // input would otherwise still carry the previous value.
+  useEffect(() => {
+    setFieldBusy(name, pending);
+  }, [name, pending, setFieldBusy]);
+
+  // Never leave the form stuck busy if this control unmounts mid-conversion.
+  useEffect(() => () => setFieldBusy(name, false), [name, setFieldBusy]);
 
   const message = localError ?? error;
   const errorId = `${id}-error`;
@@ -40,16 +58,29 @@ export default function PhotoField({
     event.target.value = "";
     if (!file) return;
 
+    const requestId = ++latestRequest.current;
     setLocalError(null);
     startTransition(async () => {
       try {
-        setPhoto(await fileToAvatarDataUrl(file));
+        const dataUrl = await fileToAvatarDataUrl(file);
+        if (latestRequest.current !== requestId) return;
+        setPhoto(dataUrl);
       } catch (cause) {
+        if (latestRequest.current !== requestId) return;
         setLocalError(
           cause instanceof Error ? cause.message : "Could not read that image",
         );
       }
     });
+  }
+
+  function onRemove() {
+    // Supersede any conversion still in flight, so it cannot restore the photo
+    // the user just removed.
+    latestRequest.current += 1;
+    setPhoto("");
+    setLocalError(null);
+    fileInput.current?.focus();
   }
 
   return (
@@ -90,11 +121,7 @@ export default function PhotoField({
             {photo ? (
               <button
                 type="button"
-                onClick={() => {
-                  setPhoto("");
-                  setLocalError(null);
-                  fileInput.current?.focus();
-                }}
+                onClick={onRemove}
                 className={buttonClasses("ghost", "sm")}
               >
                 <Trash2 className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
