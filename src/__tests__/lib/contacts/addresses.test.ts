@@ -1,8 +1,10 @@
 import {
   addressFieldName,
   addressListSchema,
+  contactInputSchema,
   formDataToAddresses,
   isBlankAddress,
+  isDroppableAddress,
 } from "@/lib/contacts/schema";
 import { EMPTY_ADDRESS } from "@/lib/contacts/schema";
 
@@ -142,4 +144,57 @@ describe("addressFieldName", () => {
   it("builds the name the parser expects", () => {
     expect(addressFieldName(2, "city")).toBe("addresses.2.city");
   });
+});
+
+describe("isDroppableAddress", () => {
+  it("drops a new row the user never filled in", () => {
+    expect(isDroppableAddress({ ...EMPTY_ADDRESS })).toBe(true);
+  });
+
+  it("keeps a saved address the user blanked out, so saving does not delete it", () => {
+    // Removing an address is what the Remove button is for; clearing its fields
+    // must not silently destroy the record.
+    expect(isDroppableAddress({ ...EMPTY_ADDRESS, id: "7" })).toBe(false);
+  });
+
+  it("keeps any row with content", () => {
+    expect(isDroppableAddress({ ...EMPTY_ADDRESS, city: "London" })).toBe(false);
+  });
+});
+
+describe("contactInputSchema", () => {
+  const valid = {
+    first_name: "Ada",
+    last_name: "Lovelace",
+    email: "Ada@Example.com",
+    phone: "",
+    company: "",
+    job_title: "",
+    notes: "",
+    photo: "",
+  };
+
+  it("emits only the fields the API still accepts", () => {
+    const parsed = contactInputSchema.parse(valid);
+
+    // The flat address fields were removed from the contact; leaving them in the
+    // schema would re-add them as nulls and the API now rejects unknown keys.
+    expect(Object.keys(parsed).sort()).toEqual([
+      "company",
+      "email",
+      "first_name",
+      "job_title",
+      "last_name",
+      "notes",
+      "phone",
+      "photo",
+    ]);
+  });
+
+  it.each(["address", "city", "state", "postal_code", "country"])(
+    "does not emit the removed %s field",
+    (field) => {
+      expect(contactInputSchema.parse(valid)).not.toHaveProperty(field);
+    },
+  );
 });

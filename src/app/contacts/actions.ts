@@ -15,7 +15,7 @@ import {
   contactInputSchema,
   formDataToAddresses,
   formDataToValues,
-  isBlankAddress,
+  isDroppableAddress,
   zodFieldErrors,
 } from "@/lib/contacts/schema";
 import type { Contact, FormState } from "@/lib/contacts/types";
@@ -42,11 +42,10 @@ export async function saveContactAction(
   formData: FormData,
 ): Promise<FormState> {
   const values = formDataToValues(formData);
-  // Rows the user left completely blank are dropped rather than saved as empty
-  // addresses; an untouched "add another" row should not create a record.
-  const addressValues = formDataToAddresses(formData).filter(
-    (address) => !isBlankAddress(address),
-  );
+  // Validate every rendered row, including blank ones, so the array indexes in
+  // any error path line up with the rows the user is looking at. Dropping rows
+  // first would compress the indexes and pin messages to the wrong row.
+  const addressValues = formDataToAddresses(formData);
 
   const parsed = contactInputSchema.safeParse(values);
   const parsedAddresses = addressListSchema.safeParse(addressValues);
@@ -73,7 +72,12 @@ export async function saveContactAction(
 
   let saved: Contact;
   try {
-    const input = { ...parsed.data, addresses: parsedAddresses.data };
+    // Only now drop the untouched new rows: they were needed for index
+    // alignment during validation, but must not become empty addresses.
+    const addresses = parsedAddresses.data.filter(
+      (_, index) => !isDroppableAddress(addressValues[index]),
+    );
+    const input = { ...parsed.data, addresses };
     saved =
       contactId === null
         ? await createContact(input)

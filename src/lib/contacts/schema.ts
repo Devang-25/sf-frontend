@@ -47,11 +47,6 @@ export const contactInputSchema = z.object({
   phone: optionalText(40, "Phone"),
   company: optionalText(200, "Company"),
   job_title: optionalText(200, "Job title"),
-  address: optionalText(300, "Address"),
-  city: optionalText(120, "City"),
-  state: optionalText(120, "State"),
-  postal_code: optionalText(20, "Postal code"),
-  country: optionalText(120, "Country"),
   notes: z
     .string()
     .trim()
@@ -292,9 +287,22 @@ export function formDataToAddresses(formData: FormData): AddressFormValues[] {
     });
 }
 
-/** True when the user left a row completely blank, so it should not be saved. */
+/** True when every editable part of a row is empty. `type` does not count: an
+ * untouched row still carries the default `Home`. */
 export function isBlankAddress(values: AddressFormValues): boolean {
   return ADDRESS_FIELDS.every((field) => !values[field.name].trim());
+}
+
+/**
+ * Should this row be dropped instead of sent to the API?
+ *
+ * Only rows the user never filled in *and* that do not already exist. Clearing
+ * every field of a saved address must not silently delete it — the row has an
+ * explicit Remove button for that, and a save quietly destroying a record the
+ * user only meant to blank out is the wrong default.
+ */
+export function isDroppableAddress(values: AddressFormValues): boolean {
+  return !values.id.trim() && isBlankAddress(values);
 }
 
 export const addressInputSchema = z.object({
