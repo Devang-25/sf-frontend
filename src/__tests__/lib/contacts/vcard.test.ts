@@ -1,4 +1,4 @@
-import { toVCard, vcardFilename } from "@/lib/contacts/vcard";
+import { toVCard, vcardFilename, vcardTimestamp } from "@/lib/contacts/vcard";
 import { makeContact } from "../../mocks/handlers";
 import type { Address } from "@/lib/contacts/types";
 
@@ -58,9 +58,27 @@ describe("toVCard", () => {
     expect(adr[1]).toBe("ADR;TYPE=home:;;12 Ockham Road;London;;;UK");
   });
 
-  it("maps Other to its own type rather than dropping the address", () => {
+  it("writes an Other address untyped, since vCard registers only work and home", () => {
     const contact = makeContact({ addresses: [address({ type: "Other" })] });
-    expect(lines(toVCard(contact)).some((l) => l.startsWith("ADR;TYPE=other:"))).toBe(true);
+    const adr = lines(toVCard(contact)).filter((l) => l.startsWith("ADR"));
+
+    expect(adr).toHaveLength(1);
+    // Untyped, not TYPE=other — that is not a registered value (RFC 6350 §5.6).
+    expect(adr[0]).toBe("ADR:;;1 Market St;San Francisco;CA;94105;USA");
+    expect(adr[0]).not.toContain("TYPE=");
+  });
+
+  it("still emits an Other address rather than skipping it", () => {
+    const contact = makeContact({
+      addresses: [address({ id: 1, type: "Work" }), address({ id: 2, type: "Other" })],
+    });
+    expect(lines(toVCard(contact)).filter((l) => l.startsWith("ADR"))).toHaveLength(2);
+  });
+
+  it("writes REV in ISO 8601 basic format", () => {
+    const card = toVCard(makeContact({ updated_at: "2026-08-27T00:12:14.123456Z" }));
+    // Basic format: no dashes, no colons, no fractional seconds.
+    expect(lines(card)).toContain("REV:20260827T001214Z");
   });
 
   it("omits ADR entirely for a contact with no addresses", () => {
@@ -144,5 +162,19 @@ describe("vcardFilename", () => {
 
   it("falls back to the id when the name slugifies to nothing", () => {
     expect(vcardFilename({ full_name: "☃☃", id: 42 })).toBe("contact-42.vcf");
+  });
+});
+
+describe("vcardTimestamp", () => {
+  it("strips the separators toISOString adds", () => {
+    expect(vcardTimestamp("2026-08-27T00:12:14.123Z")).toBe("20260827T001214Z");
+  });
+
+  it("normalises an offset to UTC", () => {
+    expect(vcardTimestamp("2026-08-27T02:12:14+02:00")).toBe("20260827T001214Z");
+  });
+
+  it("returns an empty string for an unparseable timestamp", () => {
+    expect(vcardTimestamp("not a date")).toBe("");
   });
 });

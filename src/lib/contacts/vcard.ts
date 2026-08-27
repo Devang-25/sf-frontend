@@ -10,11 +10,17 @@ import type { Address, Contact } from "./types";
  * Pure and synchronous, so the format is testable without a server.
  */
 
-/** vCard address types, lowercased per RFC 6350 §6.3.1. */
-const ADR_TYPE: Record<Address["type"], string> = {
+/**
+ * RFC 6350 §5.6 registers only `work` and `home` as TYPE values for ADR, so
+ * "Other" has no valid mapping. Rather than emit `TYPE=other` — which is not a
+ * registered value and which strict parsers may reject — an Other address is
+ * written untyped, which is exactly what it is. The distinction survives in our
+ * own model; it simply is not expressible in vCard's vocabulary.
+ */
+const ADR_TYPE: Record<Address["type"], string | null> = {
   Home: "home",
   Work: "work",
-  Other: "other",
+  Other: null,
 };
 
 /**
@@ -76,6 +82,17 @@ export function vcardFilename(contact: Pick<Contact, "full_name" | "id">): strin
   return `${slug || `contact-${contact.id}`}.vcf`;
 }
 
+/**
+ * vCard timestamps use ISO 8601 *basic* format — `20260827T001214Z`, not the
+ * extended `2026-08-27T00:12:14Z` that `toISOString` produces (RFC 6350 §4.3.5).
+ */
+export function vcardTimestamp(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
+}
+
+
 export function toVCard(contact: Contact): string {
   const lines: string[] = ["BEGIN:VCARD", "VERSION:4.0"];
 
@@ -104,7 +121,8 @@ export function toVCard(contact: Contact): string {
       address.postal_code,
       address.country,
     ]);
-    lines.push(`ADR;TYPE=${ADR_TYPE[address.type]}:${value}`);
+    const type = ADR_TYPE[address.type];
+    lines.push(type ? `ADR;TYPE=${type}:${value}` : `ADR:${value}`);
   }
 
   // vCard 4.0 takes a URI, and a data: URL is one — so the photo embeds as-is.
@@ -112,7 +130,7 @@ export function toVCard(contact: Contact): string {
 
   if (contact.notes) lines.push(`NOTE:${escapeText(contact.notes)}`);
 
-  lines.push(`REV:${new Date(contact.updated_at).toISOString().replace(/\.\d+/, "")}`);
+  lines.push(`REV:${vcardTimestamp(contact.updated_at)}`);
   lines.push("END:VCARD");
 
   // vCard requires CRLF line endings, including a trailing one.

@@ -16,10 +16,13 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const id = Number.parseInt((await params).id, 10);
-  if (!Number.isInteger(id) || id < 1) {
+  // Strict: `Number.parseInt` stops at the first non-digit, so "1abc" would
+  // parse to 1 and quietly hand back a different contact's card.
+  const raw = (await params).id;
+  if (!/^[1-9]\d*$/.test(raw)) {
     return new Response("Not found", { status: 404 });
   }
+  const id = Number(raw);
 
   const contact = await getContact(id);
   if (!contact) {
