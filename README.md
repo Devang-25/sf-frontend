@@ -61,6 +61,9 @@ just means an empty database, not a broken app.
 Click a row to get here. It confirms the detail read path works end to end:
 
 - **`< All contacts`** back link to the list.
+- **vCard export** — `vCard` downloads the contact as a `.vcf` (vCard 4.0),
+  carrying the photo and one `ADR` line per address with its own `TYPE`, so it
+  imports into Contacts, Outlook, or any address book with its addresses intact.
 - **Header** — avatar, name, and `Job title at Company`, with **Edit**
   (`/contacts/[id]/edit`) and a destructive **Delete** that asks before it acts.
 - **Field table** — email and phone rendered as `mailto:` / `tel:` links, then
