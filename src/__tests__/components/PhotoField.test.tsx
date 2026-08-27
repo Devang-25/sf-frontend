@@ -59,7 +59,7 @@ describe("PhotoField", () => {
     convert.mockResolvedValue(NEW_PHOTO);
     renderForm();
 
-    await userEvent.upload(screen.getByLabelText(/photo/i), pngFile());
+    await userEvent.upload(screen.getByLabelText(/^photo/i), pngFile());
 
     await waitFor(() => expect(photoValue()).toBe(NEW_PHOTO));
   });
@@ -67,7 +67,7 @@ describe("PhotoField", () => {
   it("clears the photo when it is removed", async () => {
     renderForm(jest.fn(), makeContact({ photo: PNG }));
 
-    await userEvent.click(screen.getByRole("button", { name: /remove/i }));
+    await userEvent.click(screen.getByRole("button", { name: /remove photo/i }));
 
     expect(photoValue()).toBe("");
   });
@@ -76,7 +76,7 @@ describe("PhotoField", () => {
     convert.mockRejectedValue(new Error("Choose a PNG, JPEG, or WebP image"));
     renderForm(jest.fn(), makeContact({ photo: PNG }));
 
-    await userEvent.upload(screen.getByLabelText(/photo/i), pngFile());
+    await userEvent.upload(screen.getByLabelText(/^photo/i), pngFile());
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       /Choose a PNG, JPEG, or WebP image/,
@@ -93,7 +93,7 @@ describe("PhotoField", () => {
     );
     const action = renderForm();
 
-    await userEvent.upload(screen.getByLabelText(/photo/i), pngFile());
+    await userEvent.upload(screen.getByLabelText(/^photo/i), pngFile());
 
     // Mid-conversion the submit is held, so the stale value cannot be saved.
     const submit = screen.getByRole("button", { name: /preparing/i });
@@ -117,8 +117,8 @@ describe("PhotoField", () => {
     );
     renderForm(jest.fn(), makeContact({ photo: PNG }));
 
-    await userEvent.upload(screen.getByLabelText(/photo/i), pngFile());
-    await userEvent.click(screen.getByRole("button", { name: /remove/i }));
+    await userEvent.upload(screen.getByLabelText(/^photo/i), pngFile());
+    await userEvent.click(screen.getByRole("button", { name: /remove photo/i }));
     expect(photoValue()).toBe("");
 
     // The superseded conversion lands afterwards and must be discarded.
@@ -134,7 +134,7 @@ describe("PhotoField", () => {
     convert.mockReturnValue(new Promise<string>(() => {}));
     renderForm();
 
-    const input = screen.getByLabelText(/photo/i);
+    const input = screen.getByLabelText(/^photo/i);
     await userEvent.upload(input, pngFile());
 
     expect(input).toBeDisabled();

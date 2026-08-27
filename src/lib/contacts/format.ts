@@ -1,4 +1,4 @@
-import type { Contact } from "./types";
+import { ADDRESS_TYPES, type Address, type AddressType, type Contact } from "./types";
 
 /** Presentation helpers shared by the list, the detail page, and the cards. */
 
@@ -43,14 +43,30 @@ export function jobLine(contact: Contact): string | null {
   return contact.job_title ?? contact.company ?? null;
 }
 
-/** Single-line postal address, skipping the parts that are not filled in. */
-export function addressLine(contact: Contact): string | null {
+/**
+ * Single-line postal address, skipping the parts that are not filled in.
+ *
+ * The API already computes this as `formatted` on each address; this mirrors the
+ * same rule for the rare case of formatting an address the server has not seen
+ * yet, such as an unsaved form row.
+ */
+export function addressLine(address: Address): string | null {
   const parts = [
-    contact.address,
-    contact.city,
-    [contact.state, contact.postal_code].filter(Boolean).join(" "),
-    contact.country,
+    address.street,
+    address.city,
+    [address.state, address.postal_code].filter(Boolean).join(" "),
+    address.country,
   ].filter((part): part is string => Boolean(part && part.trim()));
 
   return parts.length ? parts.join(", ") : null;
+}
+
+/** Addresses bucketed by type, in the order the types are declared. */
+export function groupAddressesByType(
+  addresses: Address[],
+): { type: AddressType; addresses: Address[] }[] {
+  return ADDRESS_TYPES.map((type) => ({
+    type,
+    addresses: addresses.filter((address) => address.type === type),
+  })).filter((group) => group.addresses.length > 0);
 }
