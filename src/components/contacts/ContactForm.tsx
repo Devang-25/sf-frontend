@@ -7,11 +7,13 @@ import { AlertCircle, Loader2 } from "lucide-react";
 import Field from "@/components/ui/Field";
 import Button, { buttonClasses } from "@/components/ui/Button";
 import { FormBusyProvider, useFormBusy } from "@/components/ui/FormBusy";
+import AddressFields from "./AddressFields";
 import { CONTACT_FIELD_GROUPS } from "@/lib/contacts/schema";
 import {
   EMPTY_FORM_STATE,
+  type AddressFormValues,
   type Contact,
-  type ContactInput,
+  type ContactScalarInput,
   type FormState,
 } from "@/lib/contacts/types";
 
@@ -54,9 +56,23 @@ export default function ContactForm({
 }) {
   const [state, formAction] = useActionState(action, EMPTY_FORM_STATE);
 
-  function valueFor(name: keyof ContactInput): string {
+  function valueFor(name: keyof ContactScalarInput): string {
     return state.values?.[name] ?? contact?.[name] ?? "";
   }
+
+  // After a failed submit, show what the user typed — including rows they added —
+  // rather than resetting to whatever is stored.
+  const addressRows: AddressFormValues[] =
+    state.addressValues ??
+    (contact?.addresses ?? []).map((address) => ({
+      id: String(address.id),
+      type: address.type,
+      street: address.street ?? "",
+      city: address.city ?? "",
+      state: address.state ?? "",
+      postal_code: address.postal_code ?? "",
+      country: address.country ?? "",
+    }));
 
   return (
     <FormBusyProvider>
@@ -100,6 +116,24 @@ export default function ContactForm({
           </div>
         </fieldset>
       ))}
+
+        <fieldset className="space-y-4">
+          <legend className="sr-only">Addresses</legend>
+
+          <div className="border-b border-hairline pb-2">
+            <h2 className="font-display text-sm font-semibold text-foreground">
+              Addresses
+            </h2>
+            <p className="text-[13px] text-muted-foreground">
+              A contact can have any number, each marked Home, Work, or Other.
+            </p>
+          </div>
+
+          <AddressFields
+            defaultValues={addressRows}
+            fieldErrors={state.fieldErrors}
+          />
+        </fieldset>
 
         <div className="flex items-center gap-2 border-t border-hairline pt-4">
           <SubmitButton label={submitLabel} />

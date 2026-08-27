@@ -3,6 +3,39 @@
  * Field names stay snake_case so payloads map 1:1 onto the wire format.
  */
 
+/** `AddressType` — what a given address is for. */
+export const ADDRESS_TYPES = ["Home", "Work", "Other"] as const;
+export type AddressType = (typeof ADDRESS_TYPES)[number];
+
+/** `AddressRead` — one stored address belonging to a contact. */
+export interface Address {
+  id: number;
+  type: AddressType;
+  street: string | null;
+  city: string | null;
+  state: string | null;
+  postal_code: string | null;
+  country: string | null;
+  /** Server-computed one-liner, skipping the parts that are not set. */
+  formatted: string;
+}
+
+/**
+ * `AddressWrite` — one address in a create or replace body.
+ *
+ * `id` identifies an existing address to update in place; omitting it creates a
+ * new one, and any address left out of the list is deleted.
+ */
+export interface AddressInput {
+  id: number | null;
+  type: AddressType;
+  street: string | null;
+  city: string | null;
+  state: string | null;
+  postal_code: string | null;
+  country: string | null;
+}
+
 /** `ContactRead` — a stored contact, as returned by every contact endpoint. */
 export interface Contact {
   id: number;
@@ -12,24 +45,32 @@ export interface Contact {
   phone: string | null;
   company: string | null;
   job_title: string | null;
-  address: string | null;
-  city: string | null;
-  state: string | null;
-  postal_code: string | null;
-  country: string | null;
   notes: string | null;
   /** Profile picture as a base64 `data:` URL, or `null` to fall back to initials. */
   photo: string | null;
+  addresses: Address[];
+  /** Server-computed convenience: the first address on one line, for list views. */
+  primary_address: string | null;
   created_at: string;
   updated_at: string;
   full_name: string;
 }
 
-/** Every editable field, i.e. `ContactCreate` / `ContactReplace`. */
-export type ContactInput = Omit<
+/** The scalar editable fields, i.e. everything on the contact bar its addresses. */
+export type ContactScalarInput = Omit<
   Contact,
-  "id" | "created_at" | "updated_at" | "full_name"
+  | "id"
+  | "created_at"
+  | "updated_at"
+  | "full_name"
+  | "addresses"
+  | "primary_address"
 >;
+
+/** Every editable field, i.e. `ContactCreate` / `ContactReplace`. */
+export interface ContactInput extends ContactScalarInput {
+  addresses: AddressInput[];
+}
 
 /** `ContactPage` — one page of contacts plus the totals needed to paginate. */
 export interface ContactPage {
@@ -75,10 +116,26 @@ export type FormState = {
   status: "idle" | "error";
   /** Message shown above the form; used for API-level failures. */
   message?: string;
-  /** Per-field messages keyed by input name. */
-  fieldErrors?: Partial<Record<keyof ContactInput, string>>;
+  /**
+   * Per-field messages. Scalar fields are keyed by input name; address fields
+   * use the submitted `addresses.<index>.<field>` key.
+   */
+  fieldErrors?: Record<string, string>;
   /** Echo of the submitted values so the form survives a failed round trip. */
-  values?: Partial<Record<keyof ContactInput, string>>;
+  values?: Partial<Record<keyof ContactScalarInput, string>>;
+  /** Echo of the submitted addresses, so added rows survive a failed round trip. */
+  addressValues?: AddressFormValues[];
 };
+
+/** One address row as it comes out of the form, before validation. */
+export interface AddressFormValues {
+  id: string;
+  type: string;
+  street: string;
+  city: string;
+  state: string;
+  postal_code: string;
+  country: string;
+}
 
 export const EMPTY_FORM_STATE: FormState = { status: "idle" };

@@ -124,18 +124,18 @@ export function apiErrorMessage(error: ApiError, fallback: string): string {
  * Turn a 422 `HTTPValidationError` into per-field messages. FastAPI reports the
  * location as `["body", "<field>"]`, so the second element is the input name.
  */
-export function toFieldErrors(
-  error: ApiError,
-): Partial<Record<keyof ContactInput, string>> {
+export function toFieldErrors(error: ApiError): Record<string, string> {
   const detail = error.json<{ detail?: ValidationIssue[] }>()?.detail;
   if (!Array.isArray(detail)) return {};
 
-  const fieldErrors: Partial<Record<keyof ContactInput, string>> = {};
+  const fieldErrors: Record<string, string> = {};
   for (const issue of detail) {
-    const field = issue.loc?.[issue.loc.length - 1];
-    if (typeof field === "string" && field !== "body") {
-      fieldErrors[field as keyof ContactInput] ??= issue.msg;
-    }
+    // ["body", "addresses", 0, "city"] -> "addresses.0.city"; ["body", "email"]
+    // -> "email". Dropping the leading "body" leaves the submitted input name.
+    const path = (issue.loc ?? []).slice(1);
+    if (!path.length) continue;
+    const key = path.join(".");
+    fieldErrors[key] ??= issue.msg;
   }
   return fieldErrors;
 }

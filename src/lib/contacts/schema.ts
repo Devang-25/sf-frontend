@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { MAX_PHOTO_BYTES, photoValidationError } from "./photo";
-import type { ContactInput } from "./types";
+import {
+  ADDRESS_TYPES,
+  type AddressFormValues,
+  type AddressInput,
+  type ContactScalarInput,
+} from "./types";
 
 /**
  * Client/server-shared validation for the contact form.
@@ -42,11 +47,6 @@ export const contactInputSchema = z.object({
   phone: optionalText(40, "Phone"),
   company: optionalText(200, "Company"),
   job_title: optionalText(200, "Job title"),
-  address: optionalText(300, "Address"),
-  city: optionalText(120, "City"),
-  state: optionalText(120, "State"),
-  postal_code: optionalText(20, "Postal code"),
-  country: optionalText(120, "Country"),
   notes: z
     .string()
     .trim()
@@ -65,20 +65,18 @@ export const contactInputSchema = z.object({
       const error = photoValidationError(value);
       if (error) ctx.addIssue({ code: "custom", message: error });
     }),
-}) satisfies z.ZodType<ContactInput, unknown>;
+}) satisfies z.ZodType<ContactScalarInput, unknown>;
 
 export type ContactFormValues = z.input<typeof contactInputSchema>;
 
 /** Collapse a ZodError into one message per field, keyed by input name. */
-export function zodFieldErrors(
-  error: z.ZodError,
-): Partial<Record<keyof ContactInput, string>> {
-  const fieldErrors: Partial<Record<keyof ContactInput, string>> = {};
+export function zodFieldErrors(error: z.ZodError): Record<string, string> {
+  const fieldErrors: Record<string, string> = {};
   for (const issue of error.issues) {
-    const key = issue.path[0];
-    if (typeof key === "string" && !(key in fieldErrors)) {
-      fieldErrors[key as keyof ContactInput] = issue.message;
-    }
+    // Address issues arrive as ["addresses", 0, "city"]; flatten them to the
+    // submitted input name so the form can attach the message to the right row.
+    const key = issue.path.join(".");
+    if (key && !(key in fieldErrors)) fieldErrors[key] = issue.message;
   }
   return fieldErrors;
 }
@@ -88,7 +86,7 @@ export function zodFieldErrors(
 /* ------------------------------------------------------------------ */
 
 export interface ContactFieldSpec {
-  name: keyof ContactInput;
+  name: keyof ContactScalarInput;
   label: string;
   type?: "text" | "email" | "tel" | "textarea" | "image";
   required?: boolean;
@@ -182,48 +180,6 @@ export const CONTACT_FIELD_GROUPS: ContactFieldGroup[] = [
     ],
   },
   {
-    title: "Address",
-    description: "Optional postal details.",
-    fields: [
-      {
-        name: "address",
-        label: "Street address",
-        maxLength: 300,
-        placeholder: "1 Market St, Suite 400",
-        autoComplete: "street-address",
-        wide: true,
-      },
-      {
-        name: "city",
-        label: "City",
-        maxLength: 120,
-        placeholder: "San Francisco",
-        autoComplete: "address-level2",
-      },
-      {
-        name: "state",
-        label: "State / region",
-        maxLength: 120,
-        placeholder: "CA",
-        autoComplete: "address-level1",
-      },
-      {
-        name: "postal_code",
-        label: "Postal code",
-        maxLength: 20,
-        placeholder: "94105",
-        autoComplete: "postal-code",
-      },
-      {
-        name: "country",
-        label: "Country",
-        maxLength: 120,
-        placeholder: "USA",
-        autoComplete: "country-name",
-      },
-    ],
-  },
-  {
     title: "Notes",
     description: "Anything worth remembering. No length limit.",
     fields: [
@@ -246,11 +202,125 @@ export const CONTACT_FIELDS: ContactFieldSpec[] = CONTACT_FIELD_GROUPS.flatMap(
 /** Pull the contact fields out of a submitted form, as raw strings. */
 export function formDataToValues(
   formData: FormData,
-): Record<keyof ContactInput, string> {
+): Record<keyof ContactScalarInput, string> {
   return Object.fromEntries(
     CONTACT_FIELDS.map((field) => [
       field.name,
       String(formData.get(field.name) ?? ""),
     ]),
-  ) as Record<keyof ContactInput, string>;
+  ) as Record<keyof ContactScalarInput, string>;
 }
+
+/* ------------------------------------------------------------------ */
+/* Addresses                                                           */
+/* ------------------------------------------------------------------ */
+
+export interface AddressFieldSpec {
+  name: keyof Omit<AddressFormValues, "id" | "type">;
+  label: string;
+  maxLength: number;
+  placeholder?: string;
+  autoComplete?: string;
+  wide?: boolean;
+}
+
+export const ADDRESS_FIELDS: AddressFieldSpec[] = [
+  {
+    name: "street",
+    label: "Street address",
+    maxLength: 300,
+    placeholder: "1 Market St, Suite 400",
+    autoComplete: "street-address",
+    wide: true,
+  },
+  { name: "city", label: "City", maxLength: 120, placeholder: "San Francisco", autoComplete: "address-level2" },
+  { name: "state", label: "State / region", maxLength: 120, placeholder: "CA", autoComplete: "address-level1" },
+  { name: "postal_code", label: "Postal code", maxLength: 20, placeholder: "94105", autoComplete: "postal-code" },
+  { name: "country", label: "Country", maxLength: 120, placeholder: "USA", autoComplete: "country-name" },
+];
+
+export const EMPTY_ADDRESS: AddressFormValues = {
+  id: "",
+  type: "Home",
+  street: "",
+  city: "",
+  state: "",
+  postal_code: "",
+  country: "",
+};
+
+/** The input name for one field of one address row. */
+export function addressFieldName(index: number, field: string): string {
+  return `addresses.${index}.${field}`;
+}
+
+const ADDRESS_ROW_KEY = /^addresses\.(\d+)\./;
+
+/**
+ * Pull the address rows out of a submitted form.
+ *
+ * Rows are discovered from the submitted keys rather than a hidden count, so a
+ * row removed in the browser simply stops appearing. Indexes are sorted
+ * numerically to preserve the order the user saw.
+ */
+export function formDataToAddresses(formData: FormData): AddressFormValues[] {
+  const indexes = new Set<number>();
+  for (const key of formData.keys()) {
+    const match = ADDRESS_ROW_KEY.exec(key);
+    if (match) indexes.add(Number(match[1]));
+  }
+
+  return [...indexes]
+    .sort((a, b) => a - b)
+    .map((index) => {
+      const read = (field: string) =>
+        String(formData.get(addressFieldName(index, field)) ?? "");
+      return {
+        id: read("id"),
+        type: read("type") || "Home",
+        street: read("street"),
+        city: read("city"),
+        state: read("state"),
+        postal_code: read("postal_code"),
+        country: read("country"),
+      };
+    });
+}
+
+/** True when every editable part of a row is empty. `type` does not count: an
+ * untouched row still carries the default `Home`. */
+export function isBlankAddress(values: AddressFormValues): boolean {
+  return ADDRESS_FIELDS.every((field) => !values[field.name].trim());
+}
+
+/**
+ * Should this row be dropped instead of sent to the API?
+ *
+ * Only rows the user never filled in *and* that do not already exist. Clearing
+ * every field of a saved address must not silently delete it — the row has an
+ * explicit Remove button for that, and a save quietly destroying a record the
+ * user only meant to blank out is the wrong default.
+ */
+export function isDroppableAddress(values: AddressFormValues): boolean {
+  return !values.id.trim() && isBlankAddress(values);
+}
+
+export const addressInputSchema = z.object({
+  // A row for an existing address carries its id so the API updates in place
+  // rather than deleting and recreating it.
+  id: z
+    .string()
+    .trim()
+    .transform((value) => (value ? Number(value) : null))
+    .refine((value) => value === null || Number.isInteger(value), "Invalid address")
+    .nullable()
+    .default(null),
+  type: z.enum(ADDRESS_TYPES),
+  street: optionalText(300, "Street address"),
+  city: optionalText(120, "City"),
+  state: optionalText(120, "State"),
+  postal_code: optionalText(20, "Postal code"),
+  country: optionalText(120, "Country"),
+}) satisfies z.ZodType<AddressInput, unknown>;
+
+export const addressListSchema = z.array(addressInputSchema);

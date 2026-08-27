@@ -57,13 +57,14 @@ describe("contactInputSchema", () => {
   });
 
   it("enforces the API's length limits", () => {
+    // Postal code moved to the address schema; see addresses.test.ts.
     const result = contactInputSchema.safeParse(
-      values({ first_name: "a".repeat(101), postal_code: "9".repeat(21) }),
+      values({ first_name: "a".repeat(101), company: "c".repeat(201) }),
     );
 
     expect(zodFieldErrors(result.error!)).toEqual({
       first_name: "First name must be 100 characters or fewer",
-      postal_code: "Postal code must be 20 characters or fewer",
+      company: "Company must be 200 characters or fewer",
     });
   });
 });
